@@ -39,6 +39,9 @@ jobs:
         run: sdkmanager "platforms;android-37.0" "build-tools;37.0.0"
 
       - name: Build debug APK
+        env:
+          ORG_GRADLE_PROJECT_YOUTUBE_DATA_API_KEY: ${{ secrets.YOUTUBE_DATA_API_KEY }}
+          ORG_GRADLE_PROJECT_GOOGLE_WEB_CLIENT_ID: ${{ secrets.GOOGLE_WEB_CLIENT_ID }}
         run: gradle --no-daemon --stacktrace assembleDebug
 
       - name: Upload debug APK
