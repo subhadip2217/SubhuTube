@@ -1,46 +1,71 @@
+import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { ThumbsUp, ThumbsDown, Share2, Download, MoreHorizontal } from 'lucide-react';
 import { getVideoById, videos } from '../data/videos';
 
-// Ad-free frontends (Invidious / Piped style).
-// These proxy YouTube and strip ads — same effect as using an adblocker on youtube.com
-const AD_FREE_HOSTS = [
-  'https://yewtu.be',
-  'https://invidious.flokinet.to',
-  'https://iv.ggtyler.dev',
+// Multiple player backends
+const PLAYERS = [
+  {
+    name: 'YouTube (stable)',
+    getSrc: (id) => `https://www.youtube-nocookie.com/embed/${id}?rel=0&modestbranding=1&playsinline=1`,
+    note: 'Stable · May show YouTube ads',
+  },
+  {
+    name: 'Invidious',
+    getSrc: (id) => `https://inv.nadeko.net/embed/${id}`,
+    note: 'Ad-free · May be blocked sometimes',
+  },
+  {
+    name: 'Piped',
+    getSrc: (id) => `https://piped.video/embed/${id}`,
+    note: 'Ad-free · Alternative frontend',
+  },
 ];
 
 export default function Watch() {
   const { id } = useParams();
   const video = getVideoById(id);
   const related = videos.filter((v) => v.id !== video.id).slice(0, 10);
+  const [playerIndex, setPlayerIndex] = useState(0);
 
-  // Use first available ad-free instance
-  const playerSrc = `${AD_FREE_HOSTS[0]}/embed/${video.id}?autoplay=0&quality=hd720`;
+  const current = PLAYERS[playerIndex];
+  const playerSrc = current.getSrc(video.id);
 
   return (
     <div className="flex flex-col lg:flex-row gap-6 p-4 md:p-6 max-w-[1800px] mx-auto">
-      {/* Main player column */}
       <div className="flex-1 min-w-0">
-        {/* Player - Ad-free via Invidious */}
+        {/* Player */}
         <div className="relative aspect-video bg-black rounded-xl overflow-hidden">
           <iframe
+            key={playerSrc}
             src={playerSrc}
             title={video.title}
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
             allowFullScreen
             className="absolute inset-0 w-full h-full border-0"
-            referrerPolicy="no-referrer"
+            referrerPolicy="strict-origin-when-cross-origin"
           />
         </div>
 
-        {/* Small note so user knows it's ad-free */}
-        <p className="text-[11px] text-tube-muted mt-1.5 flex items-center gap-1">
-          <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-500"></span>
-          Playing via ad-free frontend (no YouTube ads)
-        </p>
+        {/* Player switcher */}
+        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+          <span className="text-tube-muted">Player:</span>
+          {PLAYERS.map((p, i) => (
+            <button
+              key={p.name}
+              onClick={() => setPlayerIndex(i)}
+              className={`px-2.5 py-1 rounded-full transition ${
+                i === playerIndex
+                  ? 'bg-white text-black font-medium'
+                  : 'bg-tube-card hover:bg-tube-hover text-tube-muted'
+              }`}
+            >
+              {p.name}
+            </button>
+          ))}
+          <span className="text-tube-muted ml-1">{current.note}</span>
+        </div>
 
-        {/* Title & actions */}
         <h1 className="text-xl font-semibold mt-3 leading-snug">{video.title}</h1>
 
         <div className="flex flex-wrap items-center justify-between gap-3 mt-3">
@@ -79,7 +104,6 @@ export default function Watch() {
           </div>
         </div>
 
-        {/* Description */}
         <div className="mt-4 p-3 bg-tube-card rounded-xl text-sm">
           <p className="font-medium">
             {video.views} views · {video.uploaded}
@@ -89,7 +113,6 @@ export default function Watch() {
           </p>
         </div>
 
-        {/* Comments placeholder */}
         <div className="mt-6">
           <h3 className="font-medium mb-4">Comments · 12K</h3>
           <div className="flex gap-3">
@@ -105,21 +128,12 @@ export default function Watch() {
         </div>
       </div>
 
-      {/* Related videos */}
+      {/* Related */}
       <div className="w-full lg:w-96 shrink-0 space-y-3">
         {related.map((v) => (
-          <Link
-            key={v.id}
-            to={`/watch/${v.id}`}
-            className="flex gap-2 group"
-          >
+          <Link key={v.id} to={`/watch/${v.id}`} className="flex gap-2 group">
             <div className="relative w-40 aspect-video rounded-lg overflow-hidden bg-tube-card shrink-0">
-              <img
-                src={v.thumbnail}
-                alt={v.title}
-                className="w-full h-full object-cover"
-                loading="lazy"
-              />
+              <img src={v.thumbnail} alt={v.title} className="w-full h-full object-cover" loading="lazy" />
               <span className="absolute bottom-1 right-1 bg-black/80 text-[10px] px-1 rounded">
                 {v.duration}
               </span>

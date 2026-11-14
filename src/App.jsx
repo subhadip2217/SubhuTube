@@ -5,7 +5,7 @@ import Sidebar from './components/Sidebar';
 import Home from './pages/Home';
 import Watch from './pages/Watch';
 import Search from './pages/Search';
-import Placeholder from './pages/Placeholder';
+import Category from './pages/Category';
 
 export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -37,7 +37,7 @@ export default function App() {
           <Route path="/" element={<Home />} />
           <Route path="/watch/:id" element={<Watch />} />
           <Route path="/search" element={<Search />} />
-          <Route path="*" element={<Placeholder />} />
+          <Route path="/:name" element={<Category />} />
         </Routes>
       </main>
     </div>
