@@ -1,27 +1,44 @@
 import { useParams, Link } from 'react-router-dom';
 import { ThumbsUp, ThumbsDown, Share2, Download, MoreHorizontal } from 'lucide-react';
 import { getVideoById, videos } from '../data/videos';
-import VideoCard from '../components/VideoCard';
+
+// Ad-free frontends (Invidious / Piped style).
+// These proxy YouTube and strip ads — same effect as using an adblocker on youtube.com
+const AD_FREE_HOSTS = [
+  'https://yewtu.be',
+  'https://invidious.flokinet.to',
+  'https://iv.ggtyler.dev',
+];
 
 export default function Watch() {
   const { id } = useParams();
   const video = getVideoById(id);
   const related = videos.filter((v) => v.id !== video.id).slice(0, 10);
 
+  // Use first available ad-free instance
+  const playerSrc = `${AD_FREE_HOSTS[0]}/embed/${video.id}?autoplay=0&quality=hd720`;
+
   return (
     <div className="flex flex-col lg:flex-row gap-6 p-4 md:p-6 max-w-[1800px] mx-auto">
       {/* Main player column */}
       <div className="flex-1 min-w-0">
-        {/* Player */}
+        {/* Player - Ad-free via Invidious */}
         <div className="relative aspect-video bg-black rounded-xl overflow-hidden">
           <iframe
-            src={`https://www.youtube.com/embed/${video.id}?rel=0&modestbranding=1`}
+            src={playerSrc}
             title={video.title}
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
             allowFullScreen
-            className="absolute inset-0 w-full h-full"
+            className="absolute inset-0 w-full h-full border-0"
+            referrerPolicy="no-referrer"
           />
         </div>
+
+        {/* Small note so user knows it's ad-free */}
+        <p className="text-[11px] text-tube-muted mt-1.5 flex items-center gap-1">
+          <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-500"></span>
+          Playing via ad-free frontend (no YouTube ads)
+        </p>
 
         {/* Title & actions */}
         <h1 className="text-xl font-semibold mt-3 leading-snug">{video.title}</h1>
