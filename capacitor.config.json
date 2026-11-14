@@ -1,0 +1,18 @@
+{
+  "appId": "com.subhadip.subhutube",
+  "appName": "SubhuTube",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "StatusBar": {
+      "style": "DARK",
+      "backgroundColor": "#0f0f0f"
+    }
+  },
+  "android": {
+    "allowMixedContent": true,
+    "backgroundColor": "#0f0f0f"
+  }
+}
