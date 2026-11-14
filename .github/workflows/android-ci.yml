@@ -3,6 +3,7 @@ name: Android debug build
 on:
   push:
     branches:
+      - main
       - feat/subhuplay-android-foundation
   pull_request:
     branches:
