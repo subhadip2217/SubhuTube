@@ -40,11 +40,40 @@ jobs:
       - name: Install Android SDK platform
         run: sdkmanager "platforms;android-37.0" "build-tools;37.0.0"
 
+      # Use the same debug signing certificate on every CI run so Google
+      # OAuth continues to recognize APKs produced by GitHub Actions.
+      - name: Restore stable debug keystore
+        env:
+          DEBUG_KEYSTORE_BASE64: ${{ secrets.ANDROID_DEBUG_KEYSTORE_BASE64 }}
+        shell: bash
+        run: |
+          if [[ -n "$DEBUG_KEYSTORE_BASE64" ]]; then
+            mkdir -p "$HOME/.android"
+            printf '%s' "$DEBUG_KEYSTORE_BASE64" | base64 --decode > "$HOME/.android/debug.keystore"
+            chmod 600 "$HOME/.android/debug.keystore"
+            echo "Stable debug keystore restored."
+          else
+            echo "::warning::ANDROID_DEBUG_KEYSTORE_BASE64 is not configured; this APK will use a temporary CI debug certificate and Google sign-in may fail."
+          fi
+
       - name: Build debug APK
         env:
           ORG_GRADLE_PROJECT_YOUTUBE_DATA_API_KEY: ${{ secrets.YOUTUBE_DATA_API_KEY }}
           ORG_GRADLE_PROJECT_GOOGLE_WEB_CLIENT_ID: ${{ secrets.GOOGLE_WEB_CLIENT_ID }}
         run: gradle --no-daemon --stacktrace assembleDebug
+
+      - name: Verify APK signing certificate
+        shell: bash
+        run: |
+          CERT_INFO="$ANDROID_HOME/build-tools/37.0.0/apksigner verify --print-certs app/build/outputs/apk/debug/app-debug.apk"
+          echo "$CERT_INFO"
+          {
+            echo "### APK signing certificate"
+            echo '---'
+            echo ' ```text'
+            echo "$CERT_INFO"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
