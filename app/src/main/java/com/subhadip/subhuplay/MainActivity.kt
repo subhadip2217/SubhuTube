@@ -626,7 +626,7 @@ private fun getInstalledSigningCertificateSha1(context: Context): String {
         ?: throw IOException("Android could not find this app's signing certificate.")
     val digest = MessageDigest.getInstance("SHA-1").digest(signer.toByteArray())
     // Google expects 40 hexadecimal characters without colons or separators.
-    return digest.joinToString(separator = "") { byte -> "%02X".format(byte) }
+    return digest.joinToString(separator = "") { byte -> "%02x".format(byte) }
 }
 
 private object YouTubeDataRepository {
