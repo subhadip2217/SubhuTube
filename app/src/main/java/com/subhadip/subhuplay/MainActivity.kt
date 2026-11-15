@@ -626,7 +626,7 @@ private fun getInstalledSigningCertificateSha1(context: Context): String {
         ?: throw IOException("Android could not find this app's signing certificate.")
     val digest = MessageDigest.getInstance("SHA-1").digest(signer.toByteArray())
     // Google expects 40 hexadecimal characters without colons or separators.
-    return digest.joinToString(separator = "") { byte -> "%02x".format(byte) }
+    return digest.joinToString(separator = "") { byte -> "%02X".format(byte) }
 }
 
 private object YouTubeDataRepository {
@@ -656,10 +656,23 @@ private object YouTubeDataRepository {
                 val stream = if (status in 200..299) connection.inputStream else connection.errorStream
                 val payload = stream.bufferedReader().use { it.readText() }
                 if (status !in 200..299) {
-                    val reason = runCatching {
-                        JSONObject(payload).optJSONObject("error")?.optString("message")
+                    val apiError = runCatching {
+                        JSONObject(payload).optJSONObject("error")
                     }.getOrNull()
-                    throw IOException(reason?.takeIf { it.isNotBlank() } ?: "YouTube search failed (HTTP " + status + ").")
+                    val message = apiError?.optString("message")?.takeIf { it.isNotBlank() }
+                    val apiStatus = apiError?.optString("status")?.takeIf { it.isNotBlank() }
+                    val reason = runCatching {
+                        apiError?.optJSONArray("errors")?.optJSONObject(0)?.optString("reason")
+                    }.getOrNull()?.takeIf { it.isNotBlank() }
+                    val code = apiError?.optInt("code", status) ?: status
+                    val details = buildList {
+                        add("HTTP $code")
+                        if (!apiStatus.isNullOrBlank()) add(apiStatus)
+                        if (!reason.isNullOrBlank()) add("reason=$reason")
+                    }.joinToString(" · ")
+                    throw IOException(
+                        listOfNotNull(message, details).joinToString("\\n")
+                    )
                 }
 
                 val items = JSONObject(payload).optJSONArray("items") ?: return@withContext emptyList()
