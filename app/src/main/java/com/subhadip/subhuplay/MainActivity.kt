@@ -2,6 +2,8 @@ package com.subhadip.subhuplay
 
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -79,6 +81,7 @@ import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 import org.json.JSONObject
+import java.security.MessageDigest
 
 private val Canvas = Color(0xFF0B1020)
 private val Panel = Color(0xFF151D32)
@@ -309,7 +312,7 @@ private fun DiscoverScreen(modifier: Modifier = Modifier) {
             loading = true
             error = null
             try {
-                results = YouTubeDataRepository.search(term.trim())
+                results = YouTubeDataRepository.search(context, term.trim())
             } catch (exception: Exception) {
                 error = exception.localizedMessage ?: "Search could not be completed."
             } finally {
@@ -601,9 +604,35 @@ private fun Throwable.isAccountReauthFailure(): Boolean =
     generateSequence(this as Throwable?) { it.cause }
         .any { it.message?.contains("account reauth failed", ignoreCase = true) == true }
 
+@Suppress("DEPRECATION")
+private fun getInstalledSigningCertificateSha1(context: Context): String {
+    val packageManager = context.packageManager
+    val signatures = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+        val packageInfo = packageManager.getPackageInfo(
+            context.packageName,
+            PackageManager.GET_SIGNING_CERTIFICATES
+        )
+        val signingInfo = packageInfo.signingInfo
+            ?: throw IOException("Android could not read this app's signing information.")
+        signingInfo.apkContentsSigners
+    } else {
+        packageManager.getPackageInfo(
+            context.packageName,
+            PackageManager.GET_SIGNATURES
+        ).signatures.orEmpty()
+    }
+
+    val signer = signatures.firstOrNull()
+        ?: throw IOException("Android could not find this app's signing certificate.")
+    val digest = MessageDigest.getInstance("SHA-1").digest(signer.toByteArray())
+    // Google expects 40 hexadecimal characters without colons or separators.
+    return digest.joinToString(separator = "") { byte -> "%02X".format(byte) }
+}
+
 private object YouTubeDataRepository {
-    suspend fun search(query: String): List<VideoResult> =
+    suspend fun search(context: Context, query: String): List<VideoResult> =
         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            val androidCertSha1 = getInstalledSigningCertificateSha1(context)
             val uri = Uri.parse("https://www.googleapis.com/youtube/v3/search").buildUpon()
                 .appendQueryParameter("part", "snippet")
                 .appendQueryParameter("type", "video")
@@ -617,6 +646,9 @@ private object YouTubeDataRepository {
                 requestMethod = "GET"
                 connectTimeout = 15000
                 readTimeout = 20000
+                // Required when the Google Cloud API key is restricted to Android apps.
+                setRequestProperty("X-Android-Package", context.packageName)
+                setRequestProperty("X-Android-Cert", androidCertSha1)
             }
 
             try {
