@@ -65,6 +65,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.credentials.ClearCredentialStateRequest
 import androidx.credentials.CredentialManager
 import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
@@ -72,6 +73,7 @@ import androidx.compose.material3.darkColorScheme
 import coil.compose.AsyncImage
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
+import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
 import java.io.IOException
 import java.net.HttpURLConnection
@@ -126,8 +128,15 @@ class MainActivity : ComponentActivity() {
                     MainApp(
                         profile = profile!!,
                         onSignOut = {
-                            prefs.edit().clear().apply()
-                            profile = null
+                            lifecycleScope.launch {
+                                // Clear the provider's cached session as well as the local profile.
+                                runCatching {
+                                    CredentialManager.create(this@MainActivity)
+                                        .clearCredentialState(ClearCredentialStateRequest())
+                                }
+                                prefs.edit().clear().apply()
+                                profile = null
+                            }
                         }
                     )
                 }
@@ -199,20 +208,18 @@ private fun SignInScreen(onSignedIn: (UserProfile) -> Unit) {
                                 val request = GetCredentialRequest.Builder()
                                     .addCredentialOption(option)
                                     .build()
-                                val result = CredentialManager.create(context).getCredential(
-                                    context = context,
-                                    request = request
-                                )
-                                val credential = result.credential
-                                if (credential is CustomCredential &&
-                                    credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
-                                ) {
-                                    val google = GoogleIdTokenCredential.createFrom(credential.data)
-                                    val displayName = google.displayName?.takeIf { it.isNotBlank() } ?: "Viewer"
-                                    onSignedIn(UserProfile(displayName, google.id))
-                                } else {
-                                    message = "Google returned an unsupported sign-in credential. Please try again."
+                                val credentialManager = CredentialManager.create(context)
+                                val signedIn = try {
+                                    requestGoogleProfile(credentialManager, context, request)
+                                } catch (error: Exception) {
+                                    // Credential Manager can retain a stale provider session after a failed
+                                    // account reauthentication. Clear that state and retry the explicit flow once.
+                                    if (!error.isAccountReauthFailure()) throw error
+                                    message = "Refreshing your Google sign-in session…"
+                                    credentialManager.clearCredentialState(ClearCredentialStateRequest())
+                                    requestGoogleProfile(credentialManager, context, request)
                                 }
+                                onSignedIn(signedIn)
                             } catch (error: Exception) {
                                 message = error.localizedMessage ?: "Sign-in was cancelled or could not be completed."
                             } finally {
@@ -570,6 +577,29 @@ private fun ProfileScreen(profile: UserProfile, onSignOut: () -> Unit, modifier:
         }
     }
 }
+
+
+private suspend fun requestGoogleProfile(
+    credentialManager: CredentialManager,
+    context: Context,
+    request: GetCredentialRequest
+): UserProfile {
+    val result = credentialManager.getCredential(context = context, request = request)
+    val credential = result.credential
+    if (credential !is CustomCredential ||
+        credential.type != GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
+    ) {
+        throw IllegalStateException("Google returned an unsupported sign-in credential. Please try again.")
+    }
+
+    val google = GoogleIdTokenCredential.createFrom(credential.data)
+    val displayName = google.displayName?.takeIf { it.isNotBlank() } ?: "Viewer"
+    return UserProfile(displayName, google.id)
+}
+
+private fun Throwable.isAccountReauthFailure(): Boolean =
+    generateSequence(this as Throwable?) { it.cause }
+        .any { it.message?.contains("account reauth failed", ignoreCase = true) == true }
 
 private object YouTubeDataRepository {
     suspend fun search(query: String): List<VideoResult> =
