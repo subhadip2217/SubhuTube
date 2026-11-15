@@ -671,7 +671,7 @@ private object YouTubeDataRepository {
                         if (!reason.isNullOrBlank()) add("reason=$reason")
                     }.joinToString(" · ")
                     throw IOException(
-                        listOfNotNull(message, details).joinToString("\\n")
+                        listOfNotNull(message, details).joinToString("\n")
                     )
                 }
 
